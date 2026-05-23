@@ -260,22 +260,36 @@ Add each IP to Atlas → Network Access.
 
 ## Connecting Claude Desktop to the Azure Server
 
+> **Important:** Claude Desktop only supports `command`+`args` (stdio) entries in
+> `claude_desktop_config.json`. It does **not** accept a bare `url` field. Use the
+> `mcp-remote` bridge package — Claude Desktop launches it locally, and it connects
+> to your Azure server over HTTPS automatically.
+
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
-    "student-data-upload": {
-      "url": "https://student-mcp-server.azurewebsites.net/mcp",
-      "headers": {
-        "x-api-key": "your-MCP_API_KEY-value-here"
-      }
+    "student-data-upload-remote": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://student-mcp-server.azurewebsites.net/mcp",
+        "--header",
+        "x-api-key:your-MCP_API_KEY-value-here"
+      ]
     }
   }
 }
 ```
 
-> Replace the URL with your actual Azure URL and the API key with the value you set in Step 4.
+**What this does:**
+- Claude Desktop runs `npx mcp-remote <url>` as a local child process (stdio)
+- `mcp-remote` connects to your Azure server over HTTPS on your behalf
+- No `url` key is used — only `command` + `args`, which Claude Desktop supports
+
+> Replace the URL and API key with your actual values.
+> Note: `x-api-key:value` has **no space** after the colon.
 
 Restart Claude Desktop (Cmd+Q, reopen). The tools will appear under the plug icon.
 

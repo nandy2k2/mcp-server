@@ -11,6 +11,7 @@
 import express from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import mongoose from "mongoose";
@@ -595,64 +596,102 @@ app.use((req, res, next) => {
   next();
 });
 
-// API key middleware — protects /mcp endpoint
-app.use("/mcp", (req, res, next) => {
-  if (!MCP_API_KEY) return next(); // no key configured → open (not recommended for production)
+// API key middleware — protects /mcp and /messages endpoints
+const apiKeyGuard = (req, res, next) => {
+  if (!MCP_API_KEY) return next();
   const provided = req.headers["x-api-key"] || req.query.api_key;
   if (!provided || provided !== MCP_API_KEY) {
     return res.status(401).json({ error: "Unauthorized — invalid or missing x-api-key header" });
   }
   next();
-});
+};
+app.use("/mcp", apiKeyGuard);
+app.use("/messages", apiKeyGuard);
 
-// Active sessions: sessionId → { transport, mcpServer }
+// Active Streamable HTTP sessions: sessionId → { transport, mcpServer }
 const activeSessions = new Map();
+// Active SSE sessions (mcp-remote fallback): sessionId → { transport, mcpServer }
+const sseSessions = new Map();
 
-// POST /mcp — initialize new session or handle existing
+// POST /mcp — new connection or resume existing Streamable HTTP session
 app.post("/mcp", async (req, res) => {
   const sessionId = req.headers["mcp-session-id"];
-  let transport;
 
   if (sessionId && activeSessions.has(sessionId)) {
-    // Resume existing session
-    transport = activeSessions.get(sessionId).transport;
-  } else if (!sessionId) {
-    // Brand new connection — create a dedicated McpServer + transport
-    transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => randomUUID()
-    });
-    const mcpServer = createMcpServer();
-
-    transport.onclose = () => {
-      console.log(`Session closed: ${transport.sessionId}`);
-      activeSessions.delete(transport.sessionId);
-    };
-
-    await mcpServer.connect(transport);
-    activeSessions.set(transport.sessionId, { transport, mcpServer });
-    console.log(`New session: ${transport.sessionId}  (total: ${activeSessions.size})`);
-  } else {
-    return res.status(404).json({ error: "Session not found. Start a new connection (omit mcp-session-id header)." });
+    // Resume known session
+    await activeSessions.get(sessionId).transport.handleRequest(req, res, req.body);
+    return;
   }
 
+  // No session ID  →  brand new connection
+  // Stale/unknown session ID  →  Azure restarted and lost in-memory state; treat as new
+  if (sessionId) {
+    console.log(`Stale session ${sessionId.slice(0, 8)}… — creating fresh session`);
+    delete req.headers["mcp-session-id"]; // strip stale ID so transport initialises cleanly
+  }
+
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });
+  const mcpServer = createMcpServer();
+  transport.onclose = () => {
+    console.log(`StreamableHTTP session closed: ${transport.sessionId}`);
+    activeSessions.delete(transport.sessionId);
+  };
+  await mcpServer.connect(transport);
+
+  // sessionId is assigned by the SDK inside handleRequest (when 'initialize' is processed)
+  // so we MUST await handleRequest first, then store with the real session ID
   await transport.handleRequest(req, res, req.body);
+
+  if (transport.sessionId) {
+    activeSessions.set(transport.sessionId, { transport, mcpServer });
+    console.log(`New StreamableHTTP session: ${transport.sessionId}  (active: ${activeSessions.size})`);
+  }
 });
 
-// GET /mcp — SSE stream for server→client messages
+// GET /mcp — two modes:
+//   • With valid mcp-session-id  →  Streamable HTTP SSE stream (existing session)
+//   • Without session ID         →  SSE-only fallback (mcp-remote auto-strategy)
 app.get("/mcp", async (req, res) => {
   const sessionId = req.headers["mcp-session-id"];
-  if (!sessionId || !activeSessions.has(sessionId)) {
-    return res.status(404).json({ error: "Session not found or expired. Re-connect with a POST to /mcp." });
+
+  if (sessionId && activeSessions.has(sessionId)) {
+    // Streamable HTTP: stream server→client messages for this session
+    await activeSessions.get(sessionId).transport.handleRequest(req, res);
+    return;
   }
-  await activeSessions.get(sessionId).transport.handleRequest(req, res);
+
+  // SSE fallback mode — mcp-remote uses this when Streamable HTTP fails
+  // SSEServerTransport opens the stream on this response and sends an 'endpoint' event
+  // telling the client where to POST messages (/messages?sessionId=xxx)
+  console.log("SSE fallback: creating new SSE session");
+  const sseTransport = new SSEServerTransport("/messages", res);
+  const mcpServer    = createMcpServer();
+  sseSessions.set(sseTransport.sessionId, { transport: sseTransport, mcpServer });
+  sseTransport.onclose = () => {
+    console.log(`SSE session closed: ${sseTransport.sessionId}`);
+    sseSessions.delete(sseTransport.sessionId);
+  };
+  await mcpServer.connect(sseTransport);  // opens the SSE stream, sends endpoint event
 });
 
-// DELETE /mcp — explicit session close
+// POST /messages — SSE message relay (used by mcp-remote SSE fallback)
+app.post("/messages", async (req, res) => {
+  const sessionId = req.query.sessionId;
+  const entry     = sseSessions.get(sessionId);
+  if (!entry) {
+    return res.status(404).json({ error: "SSE session not found or expired. Reconnect via GET /mcp." });
+  }
+  await entry.transport.handlePostMessage(req, res, req.body);
+});
+
+// DELETE /mcp — explicit session close (both transport types)
 app.delete("/mcp", async (req, res) => {
   const sessionId = req.headers["mcp-session-id"];
-  if (sessionId && activeSessions.has(sessionId)) {
-    await activeSessions.get(sessionId).transport.close();
-    activeSessions.delete(sessionId);
+  if (sessionId) {
+    const http = activeSessions.get(sessionId);
+    if (http) { await http.transport.close(); activeSessions.delete(sessionId); }
+    const sse  = sseSessions.get(sessionId);
+    if (sse)  { await sse.transport.close();  sseSessions.delete(sessionId); }
   }
   res.status(200).json({ success: true });
 });
@@ -660,10 +699,11 @@ app.delete("/mcp", async (req, res) => {
 // GET /health — Azure App Service health probe
 app.get("/health", (req, res) => {
   res.json({
-    status:         "ok",
-    activeSessions: activeSessions.size,
-    dbConnected:    mongoose.connection.readyState === 1,
-    uptime:         Math.floor(process.uptime())
+    status:            "ok",
+    streamableSessions: activeSessions.size,
+    sseSessions:        sseSessions.size,
+    dbConnected:        mongoose.connection.readyState === 1,
+    uptime:             Math.floor(process.uptime())
   });
 });
 
