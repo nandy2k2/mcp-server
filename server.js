@@ -24,6 +24,9 @@ import dotenv from "dotenv";
 import { registerProgramTools } from "./tools/program-tools.js";
 import { registerCrmTools } from "./tools/crm-tools.js";
 import { registerWorkloadTools } from "./tools/workload-tools.js";
+import { registerRegulationTools } from "./tools/regulation-tools.js";
+import { registerNepLmsTools } from "./tools/neplms-tools.js";
+import { registerNepLmsAttendanceTools } from "./tools/neplms-attendance-tools.js";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
@@ -593,6 +596,15 @@ function createMcpServer() {
 
   // ── Workload Assignment tools ─────────────────────────────────────────────
   registerWorkloadTools(server, { requireAuth, resolveColid, resolveUser, connectDB });
+
+  // ── Regulation tools ──────────────────────────────────────────────────────
+  registerRegulationTools(server, { requireAuth, resolveColid, resolveUser, connectDB });
+
+  // ── NEP-LMS Course Workspace tools ────────────────────────────────────────
+  registerNepLmsTools(server, { requireAuth, resolveColid, resolveUser, connectDB });
+
+  // ── NEP-LMS Attendance tools ──────────────────────────────────────────────
+  registerNepLmsAttendanceTools(server, { requireAuth, resolveColid, resolveUser, connectDB });
 
   return server;
 }
