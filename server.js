@@ -21,6 +21,9 @@ import * as fs from "fs";
 import * as path from "path";
 import * as url from "url";
 import dotenv from "dotenv";
+import { registerProgramTools } from "./tools/program-tools.js";
+import { registerCrmTools } from "./tools/crm-tools.js";
+import { registerWorkloadTools } from "./tools/workload-tools.js";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
@@ -581,6 +584,15 @@ function createMcpServer() {
       return text({ success: true, path: output_path, columns: Object.keys(headers) });
     }
   );
+
+  // ── Program management tools (no delete) ──────────────────────────────────
+  registerProgramTools(server, { requireAuth, resolveColid, resolveUser, connectDB });
+
+  // ── CRM tools ─────────────────────────────────────────────────────────────
+  registerCrmTools(server, { requireAuth, resolveColid, resolveUser, connectDB });
+
+  // ── Workload Assignment tools ─────────────────────────────────────────────
+  registerWorkloadTools(server, { requireAuth, resolveColid, resolveUser, connectDB });
 
   return server;
 }
