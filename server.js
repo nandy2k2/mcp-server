@@ -244,42 +244,52 @@ function createMcpServer() {
   const ls      = createLoginSession();  // this session is private to this connection
 
   // helpers that read from ls
-  const requireAuth   = () => { if (!ls.loggedIn) throw new Error("Not authenticated. Call the 'login' tool first."); };
+  const requireAuth = () => {
+    if (!ls.loggedIn) throw new Error(
+      "Not connected. Call POST /auth with your email and password to get a session_token, " +
+      "then call the 'connect' tool with that token."
+    );
+  };
   const resolveColid  = (arg) => (arg && arg > 0 ? Number(arg) : ls.colid);
   const resolveUser   = (arg) => (arg && arg !== "" ? String(arg) : ls.user);
   const resolveInsname= (arg) => (arg && arg !== "" ? String(arg) : ls.insname);
 
-  // ── login ──────────────────────────────────────────────────────────────────
+  // ── connect ────────────────────────────────────────────────────────────────
+  // Accepts a JWT session_token from POST /auth — never raw credentials.
   server.tool(
-    "login",
-    "Authenticate and connect to the system. Requires the user's registered email and their secret_key (the account credential). Once connected, colid, user, name, role, insname and all session fields are stored automatically for all subsequent tool calls.",
+    "connect",
+    "Activate your session using a session_token from POST /auth. " +
+    "Call POST /auth with your email and password (curl or browser) to get the token, " +
+    "then paste it here. Once connected all tools work automatically.",
     {
-      email:      z.string().email().describe("Registered institutional email address"),
-      secret_key: z.string().min(1).describe("Account credential / secret key for the given email")
+      session_token: z.string().min(10).describe(
+        "JWT session token from POST /auth. Looks like eyJ..."
+      )
     },
-    async ({ email, secret_key }) => {
+    async ({ session_token }) => {
+      // ── Verify JWT ────────────────────────────────────────────────────
+      let decoded;
+      try {
+        decoded = jwt.verify(session_token, JWT_SECRET);
+      } catch (err) {
+        return text({
+          success: false,
+          error: `Invalid or expired token (${err.message}). Call POST /auth again for a fresh one.`
+        });
+      }
+
+      // ── Load full user record ─────────────────────────────────────────
       await connectDB();
+      const found = await User.findOne({ email: decoded.user }).lean();
+      if (!found) return text({ success: false, error: "User not found for this token." });
+      if (found.status === 0) return text({ success: false, error: "Account is blocked." });
 
-      const resolvedEmail    = email.toLowerCase().trim();
-      const resolvedPassword = secret_key;
-
-      const found = await User.findOne({ email: resolvedEmail }).lean();
-      if (!found)             return text({ success: false, error: "User not found. Check your email address." });
-      if (found.password !== resolvedPassword) return text({ success: false, error: "Incorrect credential." });
-      if (found.status === 0) return text({ success: false, error: "Account is blocked. Contact your administrator." });
-
-      const token = jwt.sign(
-        { user: found.email, colid: String(found.colid) },
-        JWT_SECRET,
-        { expiresIn: JWT_EXPIRES }
-      );
-
-      // Populate session — mirrors Loginstud.js global1 assignments
+      // ── Populate session (mirrors Loginstud.js global1 assignments) ───
       ls.user        = found.email;
       ls.name        = found.name;
       ls.colid       = Number(found.colid);
       ls.role        = found.role;
-      ls.token       = token;
+      ls.token       = session_token;
       ls.regno       = found.regno       || "";
       ls.semester    = found.semester    || "";
       ls.section     = found.section     || "";
@@ -288,29 +298,29 @@ function createMcpServer() {
       ls.category    = found.category    || "";
       ls.loggedIn    = true;
 
-      // Fetch institution info (mirrors getinstitutionname call in Loginstud.js)
+      // ── Institution info ──────────────────────────────────────────────
       try {
         const inst = await Institution.findOne({ colid: Number(found.colid) }).lean();
         if (inst) {
-          ls.insname     = inst.institutionname  || "";
-          ls.instype     = inst.type             || "";
-          ls.univid      = inst.admincolid       || "";
-          ls.collegecode = inst.institutioncode  || "";
-          ls.logo        = inst.logo             || "";
+          ls.insname     = inst.institutionname || "";
+          ls.instype     = inst.type            || "";
+          ls.univid      = inst.admincolid      || "";
+          ls.collegecode = inst.institutioncode || "";
+          ls.logo        = inst.logo            || "";
         }
       } catch (_) { /* institution lookup is optional */ }
 
       return text({
         success: true,
-        message: `Welcome, ${ls.name}!`,
+        message: `Connected as ${ls.name}!`,
         session: {
-          user: ls.user,          name: ls.name,
-          colid: ls.colid,        role: ls.role,
-          regno: ls.regno,        semester: ls.semester,
-          section: ls.section,    department: ls.department,
+          user: ls.user,           name: ls.name,
+          colid: ls.colid,         role: ls.role,
+          regno: ls.regno,         semester: ls.semester,
+          section: ls.section,     department: ls.department,
           programcode: ls.programcode, category: ls.category,
-          insname: ls.insname,    instype: ls.instype,
-          collegecode: ls.collegecode, token: ls.token
+          insname: ls.insname,     instype: ls.instype,
+          collegecode: ls.collegecode
         }
       });
     }
@@ -319,10 +329,10 @@ function createMcpServer() {
   // ── get_session ────────────────────────────────────────────────────────────
   server.tool(
     "get_session",
-    "Show the current session details — who is logged in, colid, role, institution name, etc.",
+    "Show the current session details — who is connected, colid, role, institution name, etc.",
     {},
     async () => {
-      if (!ls.loggedIn) return text({ loggedIn: false, message: "Not logged in. Use the 'login' tool first." });
+      if (!ls.loggedIn) return text({ loggedIn: false, message: "Not connected. Call POST /auth, then use the 'connect' tool." });
       return text({ loggedIn: true, session: { ...ls, token: ls.token ? "***set***" : "" } });
     }
   );
@@ -635,6 +645,48 @@ const apiKeyGuard = (req, res, next) => {
 };
 app.use("/mcp", apiKeyGuard);
 app.use("/messages", apiKeyGuard);
+
+// ── POST /auth ────────────────────────────────────────────────────────────────
+// Token generation endpoint — NOT an MCP tool.
+// The user calls this directly (curl / browser) to get a JWT session_token,
+// then pastes the token into Claude via the 'connect' MCP tool.
+// This keeps raw credentials completely out of the Claude conversation.
+//
+// Example:
+//   curl -X POST https://yourserver/auth \
+//        -H "Content-Type: application/json" \
+//        -d '{"email":"you@college.edu","password":"yourpass"}'
+//
+app.post("/auth", async (req, res) => {
+  const { email, password } = req.body || {};
+  if (!email || !password) {
+    return res.status(400).json({ error: "email and password are required" });
+  }
+  try {
+    await connectDB();
+    const found = await User.findOne({ email: email.toLowerCase().trim() }).lean();
+    if (!found)                    return res.status(401).json({ error: "User not found" });
+    if (found.password !== password) return res.status(401).json({ error: "Incorrect password" });
+    if (found.status === 0)        return res.status(403).json({ error: "Account is blocked" });
+
+    const session_token = jwt.sign(
+      { user: found.email, colid: String(found.colid) },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES }
+    );
+
+    res.json({
+      session_token,
+      user:    found.email,
+      name:    found.name,
+      role:    found.role,
+      colid:   found.colid,
+      hint:    "Copy session_token and paste into Claude: connect <token>"
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Active Streamable HTTP sessions: sessionId → { transport, mcpServer }
 const activeSessions = new Map();

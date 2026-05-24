@@ -1,12 +1,14 @@
 /**
  * Student Data Upload — MCP Server
  *
- * Authentication mirrors Loginstud.js / facapicontroller.loginapi:
- *   • login tool: email + password → authenticate against MongoDB Users collection
- *   • All session fields (colid, user, name, role, token, insname, …) are stored
- *     in-memory, exactly like global1 in the frontend.
- *   • Every other tool uses the stored session for colid / user automatically.
- *     Callers may still override colid/user explicitly if needed.
+ * Authentication flow:
+ *   1. Run  node generate-token.js <email> <password>  in a terminal.
+ *      This prints a JWT session_token.
+ *   2. Paste the token into Claude:  "connect <token>"
+ *   3. Claude calls the 'connect' MCP tool with the token — no credential
+ *      ever passes through the conversation.
+ *   4. All session fields (colid, user, name, role, insname, …) are stored
+ *      in-memory for the rest of the session.
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -135,7 +137,10 @@ async function connectDB() {
 // ─── Auth guard ───────────────────────────────────────────────────────────────
 function requireAuth() {
   if (!session.loggedIn) {
-    throw new Error("Not authenticated. Please run the 'login' tool first with your email and password.");
+    throw new Error(
+      "Not connected. Run  node generate-token.js <email> <password>  in a terminal to get a session_token, " +
+      "then tell Claude: 'connect <your_token>'."
+    );
   }
 }
 
@@ -264,69 +269,76 @@ const server = new McpServer({ name: "student-data-upload", version: "2.0.0" });
 // ════════════════════════════════════════════════════════════════════════════════
 
 /**
- * login
- * Mirrors Loginstud.js → ep1.get('/api/v1/loginapi')
- * Authenticates directly against MongoDB (same logic as facapicontroller.loginapi).
- * Populates all session fields (global1 equivalent).
+ * connect
+ * Activates a session from a JWT session_token obtained outside of Claude.
+ *
+ * How to get a token:
+ *   node generate-token.js <email> <yourpassword>
+ * Then tell Claude:  "connect <token>"
+ *
+ * Verifies the JWT, looks up the full user record, and populates all session
+ * fields exactly as login used to (global1 equivalent).
  */
 server.tool(
-  "login",
-  "Authenticate and connect to the system. Requires the user's registered email and their secret_key (the account credential). Once connected, colid, user, name, role, insname and all session fields are stored automatically for all subsequent tool calls.",
+  "connect",
+  "Activate your session using a session_token. " +
+  "To get a token run:  node generate-token.js <email> <yourpassword>  in a terminal — it prints a token. " +
+  "Then say: connect <token>. " +
+  "Once connected, all tools work automatically without further credentials.",
   {
-    email:      z.string().email().describe("Registered institutional email address"),
-    secret_key: z.string().min(1).describe("Account credential / secret key for the given email")
+    session_token: z.string().min(10).describe(
+      "JWT session token printed by generate-token.js. Looks like eyJ..."
+    )
   },
-  async ({ email, secret_key }) => {
+  async ({ session_token }) => {
+    // ── Verify JWT ──────────────────────────────────────────────────────────
+    const jwtSecret = process.env.JWT_SECRET || "kumropatash-kuchu-pablo-posto-1980";
+    let decoded;
+    try {
+      decoded = jwt.verify(session_token, jwtSecret);
+    } catch (err) {
+      return text({
+        success: false,
+        error: `Invalid or expired token (${err.message}). ` +
+               "Run  node generate-token.js <email> <password>  again to get a fresh one."
+      });
+    }
+
+    // ── Load full user record ───────────────────────────────────────────────
     await connectDB();
-
-    const resolvedEmail    = email.toLowerCase().trim();
-    const resolvedPassword = secret_key;
-
-    const found = await User.findOne({ email: resolvedEmail }).lean();
-    if (!found) return text({ success: false, error: "User not found. Check your email address." });
-    if (found.password !== resolvedPassword) return text({ success: false, error: "Incorrect credential." });
+    const found = await User.findOne({ email: decoded.user }).lean();
+    if (!found) return text({ success: false, error: "User not found for this token." });
     if (found.status === 0) return text({ success: false, error: "Account is blocked. Contact your administrator." });
 
-    // Generate JWT — same secret as backend config.env
-    const jwtSecret = process.env.JWT_SECRET || "kumropatash-kuchu-pablo-posto-1980";
-    const jwtExpires = process.env.JWT_EXPIRES_IN || "200h";
-    const token = jwt.sign(
-      { user: found.email, colid: String(found.colid) },
-      jwtSecret,
-      { expiresIn: jwtExpires }
-    );
-
-    // Populate session — mirrors global1 assignments in Loginstud.js
-    session.user        = found.email;         // global1.user / global1.studid
-    session.name        = found.name;          // global1.name / global1.name1
-    session.colid       = Number(found.colid); // global1.colid / global1.admincolid
-    session.role        = found.role;          // global1.role
-    session.token       = token;               // global1.token
-    session.regno       = found.regno || "";   // global1.regno
-    session.semester    = found.semester || "";// global1.semester
-    session.section     = found.section || ""; // global1.section
-    session.department  = found.department || "";// global1.department
-    session.programcode = found.programcode || "";// global1.programcode
-    session.category    = found.category || ""; // global1.category
+    // ── Populate session (mirrors global1 assignments in Loginstud.js) ──────
+    session.user        = found.email;
+    session.name        = found.name;
+    session.colid       = Number(found.colid);
+    session.role        = found.role;
+    session.token       = session_token;
+    session.regno       = found.regno       || "";
+    session.semester    = found.semester    || "";
+    session.section     = found.section     || "";
+    session.department  = found.department  || "";
+    session.programcode = found.programcode || "";
+    session.category    = found.category    || "";
     session.loggedIn    = true;
 
-    // Fetch institution info (mirrors the getinstitutionname call in Loginstud.js)
+    // ── Institution info ────────────────────────────────────────────────────
     try {
       const inst = await Institution.findOne({ colid: Number(found.colid) }).lean();
       if (inst) {
-        session.insname     = inst.institutionname || ""; // global1.insname
-        session.instype     = inst.type || "";            // global1.instype
-        session.univid      = inst.admincolid || "";      // global1.univid
-        session.collegecode = inst.institutioncode || ""; // global1.collegecode
-        session.logo        = inst.logo || "";            // global1.logo
+        session.insname     = inst.institutionname || "";
+        session.instype     = inst.type            || "";
+        session.univid      = inst.admincolid      || "";
+        session.collegecode = inst.institutioncode || "";
+        session.logo        = inst.logo            || "";
       }
-    } catch (_) {
-      // institution lookup is optional — don't fail login if it errors
-    }
+    } catch (_) { /* institution lookup is optional */ }
 
     return text({
-      success:     true,
-      message:     `Welcome, ${session.name}!`,
+      success: true,
+      message: `Connected as ${session.name}!`,
       session: {
         user:        session.user,
         name:        session.name,
@@ -340,8 +352,7 @@ server.tool(
         category:    session.category,
         insname:     session.insname,
         instype:     session.instype,
-        collegecode: session.collegecode,
-        token:       session.token
+        collegecode: session.collegecode
       }
     });
   }
@@ -350,10 +361,10 @@ server.tool(
 // ── get_session ───────────────────────────────────────────────────────────────
 server.tool(
   "get_session",
-  "Show the currently logged-in user's session details (colid, name, role, insname, etc.). Equivalent to reading all global1 fields.",
+  "Show the current session details (colid, name, role, insname, etc.).",
   {},
   async () => {
-    if (!session.loggedIn) return text({ loggedIn: false, message: "Not logged in. Use the 'login' tool first." });
+    if (!session.loggedIn) return text({ loggedIn: false, message: "Not connected. Run generate-token.js then call connect." });
     return text({ loggedIn: true, session: { ...session, token: session.token ? "***set***" : "" } });
   }
 );
