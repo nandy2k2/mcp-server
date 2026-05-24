@@ -123,7 +123,9 @@ const userLookupSchema = new mongoose.Schema({
 export const CrmLead   = mongoose.models.crmh1         || mongoose.model("crmh1",         crmh1Schema);
 export const PipelineStage = mongoose.models.PipelineStageag || mongoose.model("PipelineStageag", pipelineStageSchema);
 export const SourceDs  = mongoose.models.sourceds       || mongoose.model("sourceds",       sourcedsSchema);
-export const UserCrm   = mongoose.models.Users          || mongoose.model("Users",          userLookupSchema);
+// Use a unique model name with explicit collection — do NOT use "Users" as that
+// is owned by index.js/server.js for login authentication.
+export const UserCrm   = mongoose.models.CrmUserLookup  || mongoose.model("CrmUserLookup",  userLookupSchema, "users");
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const clean = (v) => String(v ?? "").trim();

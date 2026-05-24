@@ -85,8 +85,10 @@ const NepLmsTimetable = mongoose.models.neplmstimetableds
   || mongoose.model("neplmstimetableds", nepLmsTimetableSchema);
 const NepLmsAttendance = mongoose.models.NepLmsAttendance
   || mongoose.model("NepLmsAttendance", nepLmsAttendanceSchema);
-const UserModel = mongoose.models.user
-  || mongoose.model("user", userSchema);
+// Use a unique model name with explicit collection so we never shadow the
+// "Users" model that index.js/server.js owns for login authentication.
+const UserModel = mongoose.models.AttendanceUserLookup
+  || mongoose.model("AttendanceUserLookup", userSchema, "users");
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const t = (v) => String(v || "").trim();

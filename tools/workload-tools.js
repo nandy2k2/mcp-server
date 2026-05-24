@@ -89,8 +89,10 @@ export const RegulationCourseMap = mongoose.models.regulationcoursemapds
 export const RegulationSubject = mongoose.models.regulationsubjectds
   || mongoose.model("regulationsubjectds", regulationSubjectSchema);
 
-export const FacultyUser = mongoose.models.Users
-  || mongoose.model("Users", facultyLookupSchema);
+// Use a unique model name (with explicit collection) so we don't shadow the
+// "Users" model that index.js/server.js registers for login authentication.
+export const FacultyUser = mongoose.models.FacultyLookupUsers
+  || mongoose.model("FacultyLookupUsers", facultyLookupSchema, "users");
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const clean    = (v) => String(v ?? "").trim();
