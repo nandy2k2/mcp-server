@@ -271,17 +271,20 @@ const server = new McpServer({ name: "student-data-upload", version: "2.0.0" });
  */
 server.tool(
   "login",
-  "Sign in with your institutional email and password. This must be called before any other tool. Stores colid, user, name, role, insname and all session fields automatically — you will not need to provide them in subsequent calls.",
+  "Authenticate and connect to the system. Requires the user's registered email and their secret_key (the account credential). Once connected, colid, user, name, role, insname and all session fields are stored automatically for all subsequent tool calls.",
   {
-    email:    z.string().email().describe("Your institutional email address"),
-    password: z.string().min(1).describe("Your password")
+    email:      z.string().email().describe("Registered institutional email address"),
+    secret_key: z.string().min(1).describe("Account credential / secret key for the given email")
   },
-  async ({ email, password }) => {
+  async ({ email, secret_key }) => {
     await connectDB();
 
-    const found = await User.findOne({ email: email.toLowerCase().trim() }).lean();
+    const resolvedEmail    = email.toLowerCase().trim();
+    const resolvedPassword = secret_key;
+
+    const found = await User.findOne({ email: resolvedEmail }).lean();
     if (!found) return text({ success: false, error: "User not found. Check your email address." });
-    if (found.password !== password) return text({ success: false, error: "Incorrect password." });
+    if (found.password !== resolvedPassword) return text({ success: false, error: "Incorrect credential." });
     if (found.status === 0) return text({ success: false, error: "Account is blocked. Contact your administrator." });
 
     // Generate JWT — same secret as backend config.env
