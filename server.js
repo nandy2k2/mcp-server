@@ -792,6 +792,207 @@ app.get("/", (req, res) => {
   res.json({ name: "student-data-upload MCP server", version: "2.0.0", endpoint: "/mcp" });
 });
 
+// GET /token — browser UI for generating a session token
+// Open this page in any browser, fill in email + password, copy the token.
+app.get("/token", (req, res) => {
+  res.setHeader("Content-Type", "text/html");
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Get Session Token — MCP Server</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f0f4f8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+      padding: 36px 40px;
+      width: 100%;
+      max-width: 460px;
+    }
+    h1 { font-size: 1.3rem; color: #1a202c; margin-bottom: 6px; }
+    .subtitle { font-size: 0.85rem; color: #718096; margin-bottom: 28px; }
+    label { display: block; font-size: 0.82rem; font-weight: 600; color: #4a5568; margin-bottom: 6px; }
+    input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1.5px solid #cbd5e0;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      margin-bottom: 16px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus { border-color: #667eea; }
+    button {
+      width: 100%;
+      padding: 11px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: #5a67d8; }
+    button:disabled { background: #a0aec0; cursor: not-allowed; }
+    .result { margin-top: 24px; display: none; }
+    .result.show { display: block; }
+    .result-label { font-size: 0.82rem; font-weight: 600; color: #4a5568; margin-bottom: 6px; }
+    .token-box {
+      background: #1a202c;
+      color: #68d391;
+      padding: 14px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 0.78rem;
+      word-break: break-all;
+      white-space: pre-wrap;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+    .copy-btn {
+      margin-top: 10px;
+      background: #38a169;
+      font-size: 0.85rem;
+      padding: 8px;
+    }
+    .copy-btn:hover { background: #2f855a; }
+    .claude-box {
+      margin-top: 16px;
+      background: #ebf8ff;
+      border: 1.5px solid #90cdf4;
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 0.82rem;
+      color: #2b6cb0;
+    }
+    .claude-box strong { display: block; margin-bottom: 4px; }
+    .error-box {
+      margin-top: 16px;
+      background: #fff5f5;
+      border: 1.5px solid #fc8181;
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 0.85rem;
+      color: #c53030;
+      display: none;
+    }
+    .error-box.show { display: block; }
+    .user-info { margin-top: 12px; font-size: 0.82rem; color: #4a5568; }
+    .user-info span { font-weight: 600; color: #2d3748; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🔑 Get Session Token</h1>
+    <p class="subtitle">Sign in to generate a token for Claude MCP sessions.</p>
+
+    <label for="email">Email</label>
+    <input type="email" id="email" placeholder="you@institution.edu" autocomplete="email" />
+
+    <label for="password">Password</label>
+    <input type="password" id="password" placeholder="Your password" autocomplete="current-password" />
+
+    <button id="btn" onclick="getToken()">Generate Token</button>
+
+    <div class="error-box" id="err"></div>
+
+    <div class="result" id="result">
+      <div class="user-info" id="userInfo"></div>
+      <div class="result-label" style="margin-top:14px;">Session Token</div>
+      <div class="token-box" id="tokenBox"></div>
+      <button class="copy-btn" onclick="copyToken()">📋 Copy Token</button>
+      <div class="claude-box">
+        <strong>Paste into Claude:</strong>
+        connect &lt;paste token here&gt;
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentToken = "";
+
+    async function getToken() {
+      const email    = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      const btn      = document.getElementById("btn");
+      const err      = document.getElementById("err");
+      const result   = document.getElementById("result");
+
+      err.classList.remove("show");
+      result.classList.remove("show");
+
+      if (!email || !password) {
+        err.textContent = "Please enter both email and password.";
+        err.classList.add("show");
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = "Generating…";
+
+      try {
+        const resp = await fetch("/auth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await resp.json();
+
+        if (!resp.ok) {
+          err.textContent = data.error || "Authentication failed.";
+          err.classList.add("show");
+          return;
+        }
+
+        currentToken = data.session_token;
+        document.getElementById("tokenBox").textContent = currentToken;
+        document.getElementById("userInfo").innerHTML =
+          "Signed in as <span>" + data.name + "</span> &nbsp;·&nbsp; " +
+          "Role: <span>" + data.role + "</span> &nbsp;·&nbsp; " +
+          "College ID: <span>" + data.colid + "</span>";
+        result.classList.add("show");
+
+      } catch (e) {
+        err.textContent = "Network error: " + e.message;
+        err.classList.add("show");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Generate Token";
+      }
+    }
+
+    function copyToken() {
+      navigator.clipboard.writeText(currentToken).then(() => {
+        const btn = document.querySelector(".copy-btn");
+        btn.textContent = "✅ Copied!";
+        setTimeout(() => btn.textContent = "📋 Copy Token", 2000);
+      });
+    }
+
+    // Allow Enter key to submit
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") getToken();
+    });
+  </script>
+</body>
+</html>`);
+});
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Student MCP server running on port ${PORT}`);
   console.log(`MCP endpoint : POST/GET http://0.0.0.0:${PORT}/mcp`);
