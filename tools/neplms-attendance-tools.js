@@ -562,42 +562,7 @@ export function registerNepLmsAttendanceTools(server, { requireAuth, resolveColi
   );
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 6.  DELETE ATTENDANCE RECORD
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  server.tool(
-    "delete_lms_attendance_record",
-    "Delete a specific attendance record by its _id.",
-    { id: z.string().min(1) },
-    async ({ id }) => {
-      requireAuth();
-      await connectDB();
-      const doc = await NepLmsAttendance.findByIdAndDelete(id).lean();
-      if (!doc) return { content: [{ type: "text", text: "Record not found" }] };
-      return { content: [{ type: "text", text: `Deleted attendance record: ${id} (${doc.student || doc.regno})` }] };
-    }
-  );
-
-  server.tool(
-    "delete_lms_attendance_for_class",
-    "Delete ALL attendance records for a given class and type (use before re-marking a class).",
-    {
-      classid: z.string().min(1),
-      attendance_type: z.enum(["Regular", "Supplementary"]).optional()
-    },
-    async ({ classid, attendance_type }) => {
-      requireAuth();
-      await connectDB();
-      const colid = resolveColid();
-      const query = { colid, classid };
-      if (attendance_type) query.type = attendance_type;
-      const result = await NepLmsAttendance.deleteMany(query);
-      return { content: [{ type: "text", text: `Deleted ${result.deletedCount} attendance records for class ${classid}` }] };
-    }
-  );
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // 7.  BULK UPLOAD — JSON
+  // 6.  BULK UPLOAD — JSON
   // ═══════════════════════════════════════════════════════════════════════════
 
   server.tool(

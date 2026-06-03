@@ -392,27 +392,6 @@ export function registerWorkloadTools(server, { requireAuth, resolveColid, resol
     }
   );
 
-  // ── delete_workload_assignment ────────────────────────────────────────────
-  server.tool(
-    "delete_workload_assignment",
-    "Delete a workload assignment by its _id. Get the id from list_workload_assignments. This cannot be undone.",
-    {
-      id: z.string().describe("Assignment _id from list_workload_assignments")
-    },
-    async ({ id }) => {
-      requireAuth();
-      await connectDB();
-      const colid = resolveColid(undefined);
-      try {
-        const doc = await WorkloadAssignment.findOneAndDelete({ _id: id, colid });
-        if (!doc) return text({ error: "Assignment not found or does not belong to your college" });
-        return text({ success: true, message: "Assignment deleted", deleted: serializeAssignment(doc) });
-      } catch (e) {
-        return text({ error: e.message });
-      }
-    }
-  );
-
   // ════════════════════════════════════════════════════════════════════════════
   // BULK TOOLS
   // ════════════════════════════════════════════════════════════════════════════

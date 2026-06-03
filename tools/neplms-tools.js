@@ -474,18 +474,6 @@ export function registerNepLmsTools(server, { requireAuth, resolveColid, resolve
   );
 
   server.tool(
-    "delete_lms_resource",
-    "Delete an LMS resource by ID.",
-    { id: z.string().min(1) },
-    async ({ id }) => {
-      requireAuth();
-      await connectDB();
-      await NepLmsResource.findByIdAndDelete(id);
-      return { content: [{ type: "text", text: `Resource deleted: ${id}` }] };
-    }
-  );
-
-  server.tool(
     "bulk_upload_lms_resources_from_json",
     "Bulk upload LMS resources (Assignments, Lesson Plans, Course Materials) from a JSON array.",
     {
@@ -677,18 +665,6 @@ export function registerNepLmsTools(server, { requireAuth, resolveColid, resolve
       const doc = await NepLmsTimetable.findByIdAndUpdate(id, { $set: updates }, { new: true }).lean();
       if (!doc) return { content: [{ type: "text", text: "Class not found" }] };
       return { content: [{ type: "text", text: `Class updated: ${doc._id}` }] };
-    }
-  );
-
-  server.tool(
-    "delete_lms_class",
-    "Delete a class entry by ID.",
-    { id: z.string().min(1) },
-    async ({ id }) => {
-      requireAuth();
-      await connectDB();
-      await NepLmsTimetable.findByIdAndDelete(id);
-      return { content: [{ type: "text", text: `Class deleted: ${id}` }] };
     }
   );
 
@@ -1000,19 +976,6 @@ export function registerNepLmsTools(server, { requireAuth, resolveColid, resolve
   );
 
   server.tool(
-    "delete_lms_quiz",
-    "Delete a quiz and all its sections/questions.",
-    { id: z.string().min(1) },
-    async ({ id }) => {
-      requireAuth();
-      await connectDB();
-      await NepLmsQuiz.findByIdAndDelete(id);
-      await NepLmsQuizAttempt.deleteMany({ quizid: id });
-      return { content: [{ type: "text", text: `Quiz and attempts deleted: ${id}` }] };
-    }
-  );
-
-  server.tool(
     "add_lms_quiz_section",
     "Add a section to an existing quiz.",
     {
@@ -1056,25 +1019,6 @@ export function registerNepLmsTools(server, { requireAuth, resolveColid, resolve
       ).lean();
       if (!doc) return { content: [{ type: "text", text: "Quiz or section not found" }] };
       return { content: [{ type: "text", text: `Question added to section ${section_id}` }] };
-    }
-  );
-
-  server.tool(
-    "delete_lms_quiz_question",
-    "Delete a question from a quiz section.",
-    {
-      quiz_id: z.string().min(1),
-      section_id: z.string().min(1),
-      question_id: z.string().min(1)
-    },
-    async ({ quiz_id, section_id, question_id }) => {
-      requireAuth();
-      await connectDB();
-      await NepLmsQuiz.findOneAndUpdate(
-        { _id: quiz_id, "sections._id": section_id },
-        { $pull: { "sections.$.questions": { _id: question_id } } }
-      );
-      return { content: [{ type: "text", text: `Question deleted: ${question_id}` }] };
     }
   );
 
@@ -1365,18 +1309,6 @@ export function registerNepLmsTools(server, { requireAuth, resolveColid, resolve
       const doc = await NepLmsRemedial.findByIdAndUpdate(id, { $set: updates }, { new: true }).lean();
       if (!doc) return { content: [{ type: "text", text: "Remedial entry not found" }] };
       return { content: [{ type: "text", text: `Remedial entry updated: ${doc._id}` }] };
-    }
-  );
-
-  server.tool(
-    "delete_lms_remedial",
-    "Delete a remedial content entry.",
-    { id: z.string().min(1) },
-    async ({ id }) => {
-      requireAuth();
-      await connectDB();
-      await NepLmsRemedial.findByIdAndDelete(id);
-      return { content: [{ type: "text", text: `Remedial entry deleted: ${id}` }] };
     }
   );
 

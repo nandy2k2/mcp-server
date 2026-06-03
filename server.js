@@ -27,6 +27,12 @@ import { registerWorkloadTools } from "./tools/workload-tools.js";
 import { registerRegulationTools } from "./tools/regulation-tools.js";
 import { registerNepLmsTools } from "./tools/neplms-tools.js";
 import { registerNepLmsAttendanceTools } from "./tools/neplms-attendance-tools.js";
+import { registerFeesReceiptTools } from "./tools/fees-receipt-tools.js";
+import { registerFeesPaidReportTools } from "./tools/fees-paid-report-tools.js";
+import { registerCounterPaymentTools } from "./tools/counter-payment-tools.js";
+import { registerFeeApplicationTools } from "./tools/fee-application-tools.js";
+import { registerMFeesConfigTools } from "./tools/mfees-config-tools.js";
+import { registerAdmissionApplicationTools } from "./tools/admission-application-tools.js";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
@@ -619,6 +625,24 @@ function createMcpServer() {
 
   // ── NEP-LMS Attendance tools ──────────────────────────────────────────────
   registerNepLmsAttendanceTools(server, { requireAuth, resolveColid, resolveUser, connectDB });
+
+  // ── Fees Receipt tools ─────────────────────────────────────────────────────
+  registerFeesReceiptTools(server, { requireAuth, resolveColid, connectDB });
+
+  // ── Fees Paid Report tools ─────────────────────────────────────────────────
+  registerFeesPaidReportTools(server, { requireAuth, resolveColid, connectDB });
+
+  // ── Counter Payment tools ──────────────────────────────────────────────────
+  registerCounterPaymentTools(server, { requireAuth, resolveColid, resolveUser, connectDB });
+
+  // ── Fee Application tools ──────────────────────────────────────────────────
+  registerFeeApplicationTools(server, { requireAuth, resolveColid, resolveUser, connectDB });
+
+  // ── mFees Config tools ─────────────────────────────────────────────────────
+  registerMFeesConfigTools(server, { requireAuth, resolveColid, resolveUser, connectDB });
+
+  // ── Admission Application Management tools ─────────────────────────────────
+  registerAdmissionApplicationTools(server, { requireAuth, resolveColid, resolveUser, connectDB });
 
   return server;
 }

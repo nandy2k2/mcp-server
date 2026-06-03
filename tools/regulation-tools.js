@@ -327,25 +327,6 @@ export function registerRegulationTools(server, { requireAuth, resolveColid, res
     }
   );
 
-  // ── delete_regulation ───────────────────────────────────────────────────────
-  server.tool(
-    "delete_regulation",
-    "Delete a regulation from the master list by its _id. Warning: this does not cascade-delete related subjects or course maps.",
-    {
-      id: z.string().describe("Regulation _id from list_regulations")
-    },
-    async ({ id }) => {
-      requireAuth();
-      await connectDB();
-      const colid = resolveColid(undefined);
-      try {
-        const doc = await RegulationMaster.findOneAndDelete({ _id: id, colid });
-        if (!doc) return text({ error: "Regulation not found or does not belong to your college" });
-        return text({ success: true, message: `Regulation '${doc.regulation}' deleted` });
-      } catch (e) { return text({ error: e.message }); }
-    }
-  );
-
   // ════════════════════════════════════════════════════════════════════════════
   // REGULATION SUBJECTS
   // ════════════════════════════════════════════════════════════════════════════
@@ -482,25 +463,6 @@ export function registerRegulationTools(server, { requireAuth, resolveColid, res
         if (err) return text({ error: err });
         const doc = await RegulationSubject.findByIdAndUpdate(id, payload, { new: true, runValidators: true });
         return text({ success: true, message: "Regulation subject updated", subject: serializeSubject(doc) });
-      } catch (e) { return text({ error: e.message }); }
-    }
-  );
-
-  // ── delete_regulation_subject ───────────────────────────────────────────────
-  server.tool(
-    "delete_regulation_subject",
-    "Delete a regulation subject by its _id. Get the id from list_regulation_subjects.",
-    {
-      id: z.string().describe("Subject _id from list_regulation_subjects")
-    },
-    async ({ id }) => {
-      requireAuth();
-      await connectDB();
-      const colid = resolveColid(undefined);
-      try {
-        const doc = await RegulationSubject.findOneAndDelete({ _id: id, colid });
-        if (!doc) return text({ error: "Subject not found or does not belong to your college" });
-        return text({ success: true, message: `Subject '${doc.subject}' deleted`, deleted: serializeSubject(doc) });
       } catch (e) { return text({ error: e.message }); }
     }
   );
@@ -749,25 +711,6 @@ export function registerRegulationTools(server, { requireAuth, resolveColid, res
         if (err) return text({ error: err });
         const doc = await RegulationCourseMap.findByIdAndUpdate(id, payload, { new: true, runValidators: true });
         return text({ success: true, message: "Course mapping updated", course: serializeCourse(doc) });
-      } catch (e) { return text({ error: e.message }); }
-    }
-  );
-
-  // ── delete_regulation_course ────────────────────────────────────────────────
-  server.tool(
-    "delete_regulation_course",
-    "Delete a course mapping by its _id. Get the id from list_regulation_courses.",
-    {
-      id: z.string().describe("Course map _id from list_regulation_courses")
-    },
-    async ({ id }) => {
-      requireAuth();
-      await connectDB();
-      const colid = resolveColid(undefined);
-      try {
-        const doc = await RegulationCourseMap.findOneAndDelete({ _id: id, colid });
-        if (!doc) return text({ error: "Course mapping not found or does not belong to your college" });
-        return text({ success: true, message: `Course '${doc.course}' (${doc.coursecode}) deleted` });
       } catch (e) { return text({ error: e.message }); }
     }
   );
