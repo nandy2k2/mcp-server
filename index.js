@@ -33,6 +33,8 @@ import { registerCounterPaymentTools } from "./tools/counter-payment-tools.js";
 import { registerFeeApplicationTools } from "./tools/fee-application-tools.js";
 import { registerMFeesConfigTools } from "./tools/mfees-config-tools.js";
 import { registerAdmissionApplicationTools } from "./tools/admission-application-tools.js";
+import { registerNewBudgetTools } from "./tools/new-budget-tools.js";
+import { registerPurchaseNewTools } from "./tools/purchase-new-tools.js";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env") });
@@ -753,6 +755,12 @@ registerMFeesConfigTools(server, { requireAuth, resolveColid, resolveUser, conne
 
 // ─── Admission Application Management tools ───────────────────────────────────
 registerAdmissionApplicationTools(server, { requireAuth, resolveColid, resolveUser, connectDB });
+
+// ─── New Budget tools ─────────────────────────────────────────────────────────
+registerNewBudgetTools(server, { requireAuth, resolveColid, connectDB });
+
+// ─── Purchase New tools ───────────────────────────────────────────────────────
+registerPurchaseNewTools(server, { requireAuth, resolveColid, connectDB });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 const transport = new StdioServerTransport();
