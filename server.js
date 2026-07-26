@@ -35,6 +35,8 @@ import { registerMFeesConfigTools } from "./tools/mfees-config-tools.js";
 import { registerAdmissionApplicationTools } from "./tools/admission-application-tools.js";
 import { registerNewBudgetTools } from "./tools/new-budget-tools.js";
 import { registerPurchaseNewTools } from "./tools/purchase-new-tools.js";
+import { registerLibraryNewTools } from "./tools/library-new-tools.js";
+import { registerExamMiscTools } from "./tools/exam-misc-tools.js";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
@@ -651,6 +653,12 @@ function createMcpServer() {
 
   // ── Purchase New tools ─────────────────────────────────────────────────────
   registerPurchaseNewTools(server, { requireAuth, resolveColid, connectDB });
+
+  // ── Library New tools ──────────────────────────────────────────────────────
+  registerLibraryNewTools(server, { requireAuth, resolveColid, connectDB });
+
+  // ── Exam / Disciplinary / Mind Map / Assessment tools ─────────────────────
+  registerExamMiscTools(server, { requireAuth, resolveColid, connectDB });
 
   return server;
 }
