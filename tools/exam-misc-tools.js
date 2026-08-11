@@ -412,7 +412,7 @@ export function registerExamMiscTools(server, { requireAuth, resolveColid, conne
       if (semester) filter.semester = semester;
       if (section) filter.section = section;
       if (search) { const s = rx(search); filter.$or = [{ name: s }, { regno: s }]; }
-      const data = await UserExamMcp.find(filter).select("name email regno phone program programcode semester section academicyear").sort({ name: 1 }).limit(500).lean();
+      const data = await UserExamMcp.find(filter).select("name email regno phone program programcode semester section academicyear").sort({ name: 1 }).limit(1000).lean();
       return { content: [{ type: "text", text: JSON.stringify({ data, total: data.length }, null, 2) }] };
     }
   );
@@ -480,7 +480,7 @@ export function registerExamMiscTools(server, { requireAuth, resolveColid, conne
       severities: z.array(z.string()).optional(),
       statuses: z.array(z.string()).optional(),
       search: z.string().optional().describe("Name or regno"),
-      limit: z.number().int().min(1).max(2000).optional().default(500)
+      limit: z.number().int().min(1).max(2000).optional().default(1000)
     },
     async ({ academicyears, programcodes, semesters, sections, severities, statuses, search, limit }) => {
       requireAuth();
@@ -493,7 +493,7 @@ export function registerExamMiscTools(server, { requireAuth, resolveColid, conne
       if (severities?.length) filter.severity = { $in: severities };
       if (statuses?.length) filter.status = { $in: statuses };
       if (search) { const s = rx(search); filter.$or = [{ student: s }, { regno: s }]; }
-      const data = await DisciplinaryActionMcp.find(filter).sort({ actiondate: -1 }).limit(limit || 500).lean();
+      const data = await DisciplinaryActionMcp.find(filter).sort({ actiondate: -1 }).limit(limit || 1000).lean();
       return { content: [{ type: "text", text: JSON.stringify({ data, total: data.length }, null, 2) }] };
     }
   );
@@ -677,7 +677,7 @@ export function registerExamMiscTools(server, { requireAuth, resolveColid, conne
       status: z.string().optional().describe("Started, Submitted, Graded"),
       autosubmitted: z.string().optional().describe("Yes or No"),
       search: z.string().optional().describe("Student name or regno"),
-      limit: z.number().int().min(1).max(2000).optional().default(500)
+      limit: z.number().int().min(1).max(2000).optional().default(1000)
     },
     async ({ examid, examcode, programcode, coursecode, academicyear, status, autosubmitted, search, limit }) => {
       requireAuth();
@@ -691,7 +691,7 @@ export function registerExamMiscTools(server, { requireAuth, resolveColid, conne
       if (status) filter.status = rx(status);
       if (autosubmitted) filter.autosubmitted = autosubmitted;
       if (search) { const s = rx(search); filter.$or = [{ student: s }, { regno: s }]; }
-      const data = await OnlineExamAttemptMcp.find(filter).sort({ submittime: -1 }).limit(limit || 500).lean();
+      const data = await OnlineExamAttemptMcp.find(filter).sort({ submittime: -1 }).limit(limit || 1000).lean();
       return { content: [{ type: "text", text: JSON.stringify({ data, total: data.length }, null, 2) }] };
     }
   );
@@ -1033,7 +1033,7 @@ export function registerExamMiscTools(server, { requireAuth, resolveColid, conne
       assessmentcomponent: z.string().optional(),
       submissionstatus: z.string().optional().describe("Draft or Submitted"),
       search: z.string().optional().describe("Student name or regno"),
-      limit: z.number().int().min(1).max(5000).optional().default(500)
+      limit: z.number().int().min(1).max(5000).optional().default(1000)
     },
     async ({ academicyear, examcode, regulation, programcode, coursecode, componenttype, scoretype, assessmentgroup, assessmentcomponent, submissionstatus, search, limit }) => {
       requireAuth();
@@ -1050,7 +1050,7 @@ export function registerExamMiscTools(server, { requireAuth, resolveColid, conne
       if (assessmentcomponent) filter.assessmentcomponent = assessmentcomponent;
       if (submissionstatus) filter.submissionstatus = submissionstatus;
       if (search) { const s = rx(search); filter.$or = [{ student: s }, { regno: s }]; }
-      const data = await ComponentMarksMcp.find(filter).sort({ student: 1, assessmentcomponent: 1 }).limit(limit || 500).lean();
+      const data = await ComponentMarksMcp.find(filter).sort({ student: 1, assessmentcomponent: 1 }).limit(limit || 1000).lean();
       return { content: [{ type: "text", text: JSON.stringify({ data, total: data.length }, null, 2) }] };
     }
   );
@@ -1202,7 +1202,7 @@ export function registerExamMiscTools(server, { requireAuth, resolveColid, conne
       coursecode: z.string().optional(),
       status: z.string().optional().describe("Pass or Fail"),
       search: z.string().optional().describe("Student name or regno"),
-      limit: z.number().int().min(1).max(5000).optional().default(500)
+      limit: z.number().int().min(1).max(5000).optional().default(1000)
     },
     async ({ academicyear, examcode, programcode, semester, coursecode, status, search, limit }) => {
       requireAuth();
@@ -1215,7 +1215,7 @@ export function registerExamMiscTools(server, { requireAuth, resolveColid, conne
       if (coursecode) filter.coursecode = coursecode;
       if (status) filter.status = status;
       if (search) { const s = rx(search); filter.$or = [{ student: s }, { regno: s }]; }
-      const data = await VivaMarksMcp.find(filter).sort({ student: 1 }).limit(limit || 500).lean();
+      const data = await VivaMarksMcp.find(filter).sort({ student: 1 }).limit(limit || 1000).lean();
       return { content: [{ type: "text", text: JSON.stringify({ data, total: data.length }, null, 2) }] };
     }
   );

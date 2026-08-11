@@ -37,6 +37,9 @@ import { registerNewBudgetTools } from "./tools/new-budget-tools.js";
 import { registerPurchaseNewTools } from "./tools/purchase-new-tools.js";
 import { registerLibraryNewTools } from "./tools/library-new-tools.js";
 import { registerExamMiscTools } from "./tools/exam-misc-tools.js";
+import { registerAcademicConfigTools } from "./tools/academic-config-tools.js";
+import { registerExamModel2ExtendedTools } from "./tools/exam-model2-extended-tools.js";
+import { registerNeplmsExtendedTools } from "./tools/neplms-extended-tools.js";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env") });
@@ -769,6 +772,15 @@ registerLibraryNewTools(server, { requireAuth, resolveColid, connectDB });
 
 // ─── Exam / Disciplinary / Mind Map / Assessment tools ───────────────────────
 registerExamMiscTools(server, { requireAuth, resolveColid, connectDB });
+
+// ─── Academic Config tools (regulation seats, syllabus, CO list, calendar, grace, ATKT) ───
+registerAcademicConfigTools(server, { requireAuth, resolveColid, connectDB });
+
+// ─── Exam Model 2 Extended tools (marks, grading templates, processing pipeline) ──
+registerExamModel2ExtendedTools(server, { requireAuth, resolveColid, connectDB });
+
+// ─── NEP-LMS Extended tools (sequential content, live quiz, assessments, groups) ──
+registerNeplmsExtendedTools(server, { requireAuth, resolveColid, connectDB });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 const transport = new StdioServerTransport();

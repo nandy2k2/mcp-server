@@ -179,7 +179,7 @@ export function registerLibraryNewTools(server, { requireAuth, resolveColid, con
       const filter = { colid, role: { $not: /^Student$/i } };
       if (role) filter.role = role;
       if (search) { const s = rx(search); filter.$or = [{ name: s }, { email: s }, { department: s }]; }
-      const data = await LibraryUserLookupMcp.find(filter).select("name email role department regno phone").sort({ name: 1 }).limit(500).lean();
+      const data = await LibraryUserLookupMcp.find(filter).select("name email role department regno phone").sort({ name: 1 }).limit(1000).lean();
       return { content: [{ type: "text", text: JSON.stringify({ data, total: data.length }, null, 2) }] };
     }
   );
@@ -303,7 +303,7 @@ export function registerLibraryNewTools(server, { requireAuth, resolveColid, con
       subject: z.string().optional(),
       status: z.string().optional().describe("Available, Issued, Lost, etc."),
       keywords: z.string().optional(),
-      limit: z.number().int().min(1).max(5000).optional().default(500)
+      limit: z.number().int().min(1).max(5000).optional().default(1000)
     },
     async ({ libraryid, libraryname, accessionno, title, author, classification, publisher, isbn, category, subject, status, keywords, limit }) => {
       requireAuth();
@@ -321,7 +321,7 @@ export function registerLibraryNewTools(server, { requireAuth, resolveColid, con
       if (subject) filter.subject = rx(subject);
       if (status) filter.status = rx(status);
       if (keywords) filter.keywords = rx(keywords);
-      const data = await LibraryBookMcp.find(filter).sort({ title: 1 }).limit(limit || 500).lean();
+      const data = await LibraryBookMcp.find(filter).sort({ title: 1 }).limit(limit || 1000).lean();
       return { content: [{ type: "text", text: JSON.stringify({ data, total: data.length }, null, 2) }] };
     }
   );
@@ -513,7 +513,7 @@ export function registerLibraryNewTools(server, { requireAuth, resolveColid, con
       category: z.string().optional(),
       issuetype: z.string().optional(),
       status: z.string().optional().describe("Issued or Returned — omit for all"),
-      limit: z.number().int().min(1).max(2000).optional().default(500)
+      limit: z.number().int().min(1).max(2000).optional().default(1000)
     },
     async ({ libraryid, regno, email, accessionno, category, issuetype, status, limit }) => {
       requireAuth();
@@ -526,7 +526,7 @@ export function registerLibraryNewTools(server, { requireAuth, resolveColid, con
       if (category) filter.category = rx(category);
       if (issuetype) filter.issuetype = rx(issuetype);
       if (status) filter.status = rx(status);
-      const data = await LibraryIssueMcp.find(filter).sort({ issuedate: -1 }).limit(limit || 500).lean();
+      const data = await LibraryIssueMcp.find(filter).sort({ issuedate: -1 }).limit(limit || 1000).lean();
       return { content: [{ type: "text", text: JSON.stringify({ data, total: data.length }, null, 2) }] };
     }
   );
@@ -751,7 +751,7 @@ export function registerLibraryNewTools(server, { requireAuth, resolveColid, con
       title: z.string().optional(),
       accessionno: z.string().optional(),
       status: z.string().optional().describe("Requested, Issued, Rejected"),
-      limit: z.number().int().min(1).max(3000).optional().default(500)
+      limit: z.number().int().min(1).max(3000).optional().default(1000)
     },
     async ({ libraryid, regno, email, title, accessionno, status, limit }) => {
       requireAuth();
@@ -763,7 +763,7 @@ export function registerLibraryNewTools(server, { requireAuth, resolveColid, con
       if (title) filter.title = rx(title);
       if (accessionno) filter.accessionno = rx(accessionno);
       if (status) filter.status = rx(status);
-      const data = await LibraryRequestMcp.find(filter).sort({ requestdate: -1 }).limit(limit || 500).lean();
+      const data = await LibraryRequestMcp.find(filter).sort({ requestdate: -1 }).limit(limit || 1000).lean();
       return { content: [{ type: "text", text: JSON.stringify({ data, total: data.length }, null, 2) }] };
     }
   );
