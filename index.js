@@ -40,6 +40,10 @@ import { registerExamMiscTools } from "./tools/exam-misc-tools.js";
 import { registerAcademicConfigTools } from "./tools/academic-config-tools.js";
 import { registerExamModel2ExtendedTools } from "./tools/exam-model2-extended-tools.js";
 import { registerNeplmsExtendedTools } from "./tools/neplms-extended-tools.js";
+import { registerHrTools } from "./tools/hr-tools.js";
+import { registerRecruitmentPlacementTools } from "./tools/recruitment-placement-tools.js";
+import { registerHostelAlumniMentoringTools } from "./tools/hostel-alumni-mentoring-tools.js";
+import { registerAssetMiscTools } from "./tools/asset-misc-tools.js";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env") });
@@ -537,26 +541,6 @@ server.tool(
   }
 );
 
-// ── delete_student ────────────────────────────────────────────────────────────
-server.tool(
-  "delete_student",
-  "Delete a student record by MongoDB _id. colid is taken from your session.",
-  {
-    id: z.string().describe("Student MongoDB _id (from list_students)")
-  },
-  async ({ id }) => {
-    requireAuth();
-    await connectDB();
-    const colid = resolveColid(undefined);
-    try {
-      const doc = await User.findOneAndDelete({ _id: id, colid, role: "Student" });
-      if (!doc) return text({ error: "Student not found or does not belong to your college" });
-      return text({ success: true, message: "Student deleted", deleted: serializeStudent(doc) });
-    } catch (err) {
-      return text({ error: err.message });
-    }
-  }
-);
 
 // ── bulk_upload_from_excel ─────────────────────────────────────────────────────
 server.tool(
@@ -781,6 +765,10 @@ registerExamModel2ExtendedTools(server, { requireAuth, resolveColid, connectDB }
 
 // ─── NEP-LMS Extended tools (sequential content, live quiz, assessments, groups) ──
 registerNeplmsExtendedTools(server, { requireAuth, resolveColid, connectDB });
+registerHrTools(server, { requireAuth, resolveColid, connectDB });
+registerRecruitmentPlacementTools(server, { requireAuth, resolveColid, connectDB });
+registerHostelAlumniMentoringTools(server, { requireAuth, resolveColid, connectDB });
+registerAssetMiscTools(server, { requireAuth, resolveColid, connectDB });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 const transport = new StdioServerTransport();

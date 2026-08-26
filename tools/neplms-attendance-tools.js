@@ -55,12 +55,21 @@ const nepLmsAttendanceSchema = new mongoose.Schema(
     classid: mongoose.Schema.Types.ObjectId,
     studentid: mongoose.Schema.Types.ObjectId,
     student: String, studentemail: String, studentphone: String, regno: String,
+    rollno: String,
     program: String, programcode: String, academicyear: String, semester: String,
+    section: String,
+    classgroup: String,
+    enrollmentgroup: String,
+    enrollmentgroupid: mongoose.Schema.Types.ObjectId,
+    specialization: String,
     major: String, faculty: String, facultyemail: String,
     course: String, coursecode: String, classdate: String, classtime: String,
     attendance: { type: Number, enum: [0, 1], default: 1 },
     type: { type: String, default: "Regular" },
     comments: String,
+    changereason: String,
+    changedby: String,
+    changedat: Date,
     colid: { type: Number, required: true }, user: String
   },
   { timestamps: true }
@@ -289,6 +298,7 @@ export function registerNepLmsAttendanceTools(server, { requireAuth, resolveColi
       classtime: z.string().optional(),
       academicyear: z.string().optional(),
       semester: z.string().optional(),
+      section: z.string().optional(),
       course: z.string().optional(),
       coursecode: z.string().optional(),
       program: z.string().optional(),
@@ -296,6 +306,8 @@ export function registerNepLmsAttendanceTools(server, { requireAuth, resolveColi
       major: z.string().optional(),
       faculty: z.string().optional(),
       facultyemail: z.string().optional(),
+      classgroup: z.string().optional(),
+      enrollmentgroup: z.string().optional(),
       attendance_type: z.enum(["Regular", "Supplementary"]).default("Regular").optional(),
       comments: z.string().optional(),
       students: z.array(z.object({
@@ -304,10 +316,12 @@ export function registerNepLmsAttendanceTools(server, { requireAuth, resolveColi
         email: z.string().optional(),
         phone: z.string().optional(),
         regno: z.string().optional(),
+        rollno: z.string().optional(),
         programcode: z.string().optional(),
         semester: z.string().optional(),
         Major: z.string().optional(),
         section: z.string().optional(),
+        specialization: z.string().optional(),
         attendance: z.number().int().min(0).max(1).describe("1 = Present, 0 = Absent")
       })).min(1).max(1000)
     },
@@ -325,13 +339,16 @@ export function registerNepLmsAttendanceTools(server, { requireAuth, resolveColi
         classtime: t(args.classtime),
         academicyear: t(args.academicyear),
         semester: t(args.semester),
+        section: t(args.section),
         course: t(args.course),
         coursecode: t(args.coursecode),
         program: t(args.program),
         programcode: t(args.programcode),
         major: t(args.major),
         faculty: t(args.faculty),
-        facultyemail: t(args.facultyemail)
+        facultyemail: t(args.facultyemail),
+        classgroup: t(args.classgroup),
+        enrollmentgroup: t(args.enrollmentgroup)
       };
 
       // If any class fields are missing, fetch from DB
@@ -364,10 +381,15 @@ export function registerNepLmsAttendanceTools(server, { requireAuth, resolveColi
           studentemail: t(item.email),
           studentphone: t(item.phone),
           regno: t(item.regno),
+          rollno: t(item.rollno),
           program: classInfo.program,
           programcode: t(item.programcode) || classInfo.programcode,
           academicyear: classInfo.academicyear,
           semester: t(item.semester) || classInfo.semester,
+          section: t(item.section) || classInfo.section,
+          classgroup: classInfo.classgroup,
+          enrollmentgroup: classInfo.enrollmentgroup,
+          specialization: t(item.specialization),
           major: t(item.Major) || classInfo.major,
           faculty: classInfo.faculty,
           facultyemail: classInfo.facultyemail,
@@ -418,11 +440,15 @@ export function registerNepLmsAttendanceTools(server, { requireAuth, resolveColi
       attendance: z.number().int().min(0).max(1).describe("1=Present, 0=Absent"),
       attendance_type: z.enum(["Regular", "Supplementary"]).default("Regular").optional(),
       comments: z.string().optional(),
+      changereason: z.string().optional(),
       // Class context fields (auto-fetched from timetable if omitted)
       classdate: z.string().optional(),
       classtime: z.string().optional(),
       academicyear: z.string().optional(),
       semester: z.string().optional(),
+      section: z.string().optional(),
+      classgroup: z.string().optional(),
+      enrollmentgroup: z.string().optional(),
       coursecode: z.string().optional(),
       course: z.string().optional(),
       program: z.string().optional(),
@@ -434,7 +460,9 @@ export function registerNepLmsAttendanceTools(server, { requireAuth, resolveColi
       student_name: z.string().optional(),
       student_email: z.string().optional(),
       student_phone: z.string().optional(),
-      regno: z.string().optional()
+      regno: z.string().optional(),
+      rollno: z.string().optional(),
+      specialization: z.string().optional()
     },
     async (args) => {
       requireAuth();
@@ -495,10 +523,18 @@ export function registerNepLmsAttendanceTools(server, { requireAuth, resolveColi
       const payload = {
         classid: args.classid, studentid: args.studentid,
         student: studentName, studentemail: studentEmail, studentphone: studentPhone, regno,
-        program, programcode, academicyear, semester, major,
-        faculty, facultyemail, course, coursecode, classdate, classtime,
+        rollno: t(args.rollno),
+        program, programcode, academicyear, semester,
+        section: t(args.section),
+        classgroup: t(args.classgroup),
+        enrollmentgroup: t(args.enrollmentgroup),
+        specialization: t(args.specialization),
+        major, faculty, facultyemail, course, coursecode, classdate, classtime,
         attendance: Number(args.attendance) === 0 ? 0 : 1,
-        type: attendanceType, comments: t(args.comments), colid, user
+        type: attendanceType, comments: t(args.comments),
+        changereason: t(args.changereason),
+        changedby: user, changedat: args.changereason ? new Date() : undefined,
+        colid, user
       };
 
       const row = await NepLmsAttendance.findOneAndUpdate(
@@ -531,20 +567,32 @@ export function registerNepLmsAttendanceTools(server, { requireAuth, resolveColi
 
   server.tool(
     "update_lms_attendance_record",
-    "Update a specific attendance record by its _id (change present/absent status, comments, or type).",
+    "Update a specific attendance record by its _id (change present/absent status, comments, type, or any other field).",
     {
       id: z.string().min(1).describe("_id of the attendance record"),
       attendance: z.number().int().min(0).max(1).optional().describe("1=Present, 0=Absent"),
       comments: z.string().optional(),
-      type: z.enum(["Regular", "Supplementary"]).optional()
+      type: z.enum(["Regular", "Supplementary"]).optional(),
+      changereason: z.string().optional(),
+      section: z.string().optional(),
+      classgroup: z.string().optional(),
+      enrollmentgroup: z.string().optional(),
+      specialization: z.string().optional(),
+      rollno: z.string().optional(),
+      faculty: z.string().optional(),
+      facultyemail: z.string().optional(),
+      major: z.string().optional()
     },
-    async ({ id, attendance, comments, type }) => {
+    async ({ id, attendance, comments, type, changereason, ...rest }) => {
       requireAuth();
       await connectDB();
+      const user = resolveUser();
       const updates = {};
       if (attendance !== undefined) updates.attendance = Number(attendance) === 0 ? 0 : 1;
       if (comments !== undefined) updates.comments = comments;
       if (type !== undefined) updates.type = type;
+      if (changereason !== undefined) { updates.changereason = changereason; updates.changedby = user; updates.changedat = new Date(); }
+      for (const [k, v] of Object.entries(rest)) if (v !== undefined) updates[k] = v;
       const doc = await NepLmsAttendance.findByIdAndUpdate(id, { $set: updates }, { new: true }).lean();
       if (!doc) return { content: [{ type: "text", text: "Attendance record not found" }] };
       return {
@@ -576,10 +624,15 @@ export function registerNepLmsAttendanceTools(server, { requireAuth, resolveColi
         attendance_type: z.enum(["Regular", "Supplementary"]).optional(),
         student: z.string().optional(),
         regno: z.string().optional(),
+        rollno: z.string().optional(),
         studentemail: z.string().optional(),
         studentphone: z.string().optional(),
         academicyear: z.string().optional(),
         semester: z.string().optional(),
+        section: z.string().optional(),
+        classgroup: z.string().optional(),
+        enrollmentgroup: z.string().optional(),
+        specialization: z.string().optional(),
         coursecode: z.string().optional(),
         course: z.string().optional(),
         programcode: z.string().optional(),
@@ -608,7 +661,11 @@ export function registerNepLmsAttendanceTools(server, { requireAuth, resolveColi
           type: attendanceType,
           student: t(rec.student), studentemail: t(rec.studentemail),
           studentphone: t(rec.studentphone), regno: t(rec.regno),
+          rollno: t(rec.rollno),
           academicyear: t(rec.academicyear), semester: t(rec.semester),
+          section: t(rec.section),
+          classgroup: t(rec.classgroup), enrollmentgroup: t(rec.enrollmentgroup),
+          specialization: t(rec.specialization),
           coursecode: t(rec.coursecode), course: t(rec.course),
           programcode: t(rec.programcode), program: t(rec.program),
           major: t(rec.major), faculty: t(rec.faculty),

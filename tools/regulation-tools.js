@@ -65,19 +65,25 @@ const regulationSubjectSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const regulationCourseMapSchema = new mongoose.Schema({
-  academicyear: { type: String, trim: true, required: true },
-  regulation:   { type: String, trim: true, required: true },
-  subject:      { type: String, trim: true, required: true },
-  type:         { type: String, enum: ["Major","Minor","AEC","SEC","VAC","IDC"], required: true },
-  semester:     { type: String, trim: true, required: true },
-  program:      { type: String, trim: true, required: true },
-  programcode:  { type: String, trim: true, required: true },
-  course:       { type: String, trim: true, required: true },
-  coursecode:   { type: String, trim: true, required: true },
-  credit:       { type: Number, default: 0 },
-  status:       { type: String, trim: true, default: "Active" },
-  colid:        { type: Number, required: true },
-  user:         { type: String, trim: true }
+  academicyear:    { type: String, trim: true, required: true },
+  regulation:      { type: String, trim: true, required: true },
+  subject:         { type: String, trim: true, required: true },
+  type:            { type: String, enum: ["Major","Minor","AEC","SEC","VAC","IDC"], required: true },
+  semester:        { type: String, trim: true, required: true },
+  program:         { type: String, trim: true, required: true },
+  programcode:     { type: String, trim: true, required: true },
+  faculty:         { type: String, trim: true, default: "" },
+  institution:     { type: String, trim: true, default: "" },
+  department:      { type: String, trim: true, default: "" },
+  course:          { type: String, trim: true, required: true },
+  coursecode:      { type: String, trim: true, required: true },
+  coursetype:      { type: String, enum: ["Theory","Practical","Tutorial","Internship","Project","Experiential learning"], default: "Theory" },
+  deliverytype:    { type: String, enum: ["Compulsory","Elective"], default: "Compulsory" },
+  coursemastercode:{ type: String, trim: true, default: "" },
+  credit:          { type: Number, default: 0 },
+  status:          { type: String, trim: true, default: "Active" },
+  colid:           { type: Number, required: true },
+  user:            { type: String, trim: true }
 }, { timestamps: true });
 
 const mprogramsLookupSchema = new mongoose.Schema({
@@ -138,22 +144,31 @@ function validateSubject(p) {
   return "";
 }
 
+const COURSE_TYPES    = ["Theory","Practical","Tutorial","Internship","Project","Experiential learning"];
+const DELIVERY_TYPES  = ["Compulsory","Elective"];
+
 // ── Regulation Course Map payload ─────────────────────────────────────────────
 function coursePayload(input = {}, colid, user) {
   return {
-    academicyear: clean(input.academicyear || input.academicYear),
-    regulation:   clean(input.regulation),
-    subject:      clean(input.subject),
-    type:         TYPES.includes(input.type) ? input.type : "",
-    semester:     clean(input.semester),
-    program:      clean(input.program),
-    programcode:  clean(input.programcode),
-    course:       clean(input.course),
-    coursecode:   clean(input.coursecode),
-    credit:       toNum(input.credit || input.credits) || 0,
-    status:       clean(input.status) || "Active",
-    colid:        toNum(input.colid || colid),
-    user:         clean(input.user  || user)
+    academicyear:    clean(input.academicyear || input.academicYear),
+    regulation:      clean(input.regulation),
+    subject:         clean(input.subject),
+    type:            TYPES.includes(input.type) ? input.type : "",
+    semester:        clean(input.semester),
+    program:         clean(input.program),
+    programcode:     clean(input.programcode),
+    faculty:         clean(input.faculty),
+    institution:     clean(input.institution),
+    department:      clean(input.department),
+    course:          clean(input.course),
+    coursecode:      clean(input.coursecode),
+    coursetype:      COURSE_TYPES.includes(input.coursetype) ? input.coursetype : "Theory",
+    deliverytype:    DELIVERY_TYPES.includes(input.deliverytype) ? input.deliverytype : "Compulsory",
+    coursemastercode:clean(input.coursemastercode),
+    credit:          toNum(input.credit || input.credits) || 0,
+    status:          clean(input.status) || "Active",
+    colid:           toNum(input.colid || colid),
+    user:            clean(input.user  || user)
   };
 }
 function validateCourse(p) {
@@ -195,17 +210,23 @@ const subjectHeaderMap = {
 };
 
 const courseHeaderMap = {
-  academicyear: ["academicyear","year"],
-  regulation:   ["regulation"],
-  subject:      ["subject"],
-  type:         ["type"],
-  semester:     ["semester","sem"],
-  program:      ["program","programme"],
-  programcode:  ["programcode","programcode"],
-  course:       ["course","coursename"],
-  coursecode:   ["coursecode","coursecode"],
-  credit:       ["credit","credits"],
-  status:       ["status"]
+  academicyear:    ["academicyear","year"],
+  regulation:      ["regulation"],
+  subject:         ["subject"],
+  type:            ["type"],
+  semester:        ["semester","sem"],
+  program:         ["program","programme"],
+  programcode:     ["programcode"],
+  faculty:         ["faculty"],
+  institution:     ["institution"],
+  department:      ["department"],
+  course:          ["course","coursename"],
+  coursecode:      ["coursecode"],
+  coursetype:      ["coursetype"],
+  deliverytype:    ["deliverytype","delivery"],
+  coursemastercode:["coursemastercode","mastercode"],
+  credit:          ["credit","credits"],
+  status:          ["status"]
 };
 
 function excelRowToBody(row, headerMap) {
@@ -238,8 +259,11 @@ function serializeCourse(d) {
     id: String(doc._id), academicyear: doc.academicyear, regulation: doc.regulation,
     subject: doc.subject, type: doc.type, semester: doc.semester,
     program: doc.program, programcode: doc.programcode,
-    course: doc.course, coursecode: doc.coursecode, credit: doc.credit,
-    status: doc.status, colid: doc.colid, user: doc.user
+    faculty: doc.faculty, institution: doc.institution, department: doc.department,
+    course: doc.course, coursecode: doc.coursecode,
+    coursetype: doc.coursetype, deliverytype: doc.deliverytype,
+    coursemastercode: doc.coursemastercode,
+    credit: doc.credit, status: doc.status, colid: doc.colid, user: doc.user
   };
 }
 
@@ -651,19 +675,25 @@ export function registerRegulationTools(server, { requireAuth, resolveColid, res
   // ── add_regulation_course ───────────────────────────────────────────────────
   server.tool(
     "add_regulation_course",
-    "Add a single course-to-subject mapping (e.g. Financial Accounting → Commerce, B.Com, Semester 1, Major). All fields required.",
+    "Add a single course-to-subject mapping (e.g. Financial Accounting → Commerce, B.Com, Semester 1, Major). All core fields required.",
     {
-      academicyear: z.string().min(1).describe("Academic year e.g. 2026-27"),
-      regulation:   z.string().min(1).describe("Regulation name"),
-      subject:      z.string().min(1).describe("Subject name (must exist in regulation subjects)"),
-      type:         z.enum(["Major","Minor","AEC","SEC","VAC","IDC"]).describe("Type"),
-      semester:     z.string().min(1).describe("Semester e.g. 1, 2, 3"),
-      program:      z.string().min(1).describe("Program name e.g. B.Com"),
-      programcode:  z.string().min(1).describe("Program code e.g. BCOM"),
-      course:       z.string().min(1).describe("Course name e.g. Financial Accounting"),
-      coursecode:   z.string().min(1).describe("Course code e.g. BCOM101"),
-      credit:       z.number().optional().default(0).describe("Course credit hours"),
-      status:       z.enum(["Active","Inactive"]).optional().default("Active")
+      academicyear:    z.string().min(1).describe("Academic year e.g. 2026-27"),
+      regulation:      z.string().min(1).describe("Regulation name"),
+      subject:         z.string().min(1).describe("Subject name (must exist in regulation subjects)"),
+      type:            z.enum(["Major","Minor","AEC","SEC","VAC","IDC"]).describe("Type"),
+      semester:        z.string().min(1).describe("Semester e.g. 1, 2, 3"),
+      program:         z.string().min(1).describe("Program name e.g. B.Com"),
+      programcode:     z.string().min(1).describe("Program code e.g. BCOM"),
+      faculty:         z.string().optional().default("").describe("Assigned faculty name"),
+      institution:     z.string().optional().default("").describe("Institution name"),
+      department:      z.string().optional().default("").describe("Department name"),
+      course:          z.string().min(1).describe("Course name e.g. Financial Accounting"),
+      coursecode:      z.string().min(1).describe("Course code e.g. BCOM101"),
+      coursetype:      z.enum(["Theory","Practical","Tutorial","Internship","Project","Experiential learning"]).optional().default("Theory"),
+      deliverytype:    z.enum(["Compulsory","Elective"]).optional().default("Compulsory"),
+      coursemastercode:z.string().optional().default("").describe("Master course code reference"),
+      credit:          z.number().optional().default(0).describe("Course credit hours"),
+      status:          z.enum(["Active","Inactive"]).optional().default("Active")
     },
     async (args) => {
       requireAuth();
@@ -685,18 +715,24 @@ export function registerRegulationTools(server, { requireAuth, resolveColid, res
     "update_regulation_course",
     "Update a course mapping by its _id. Get the id from list_regulation_courses. Only pass fields to change.",
     {
-      id:           z.string().describe("Course map _id from list_regulation_courses"),
-      academicyear: z.string().optional(),
-      regulation:   z.string().optional(),
-      subject:      z.string().optional(),
-      type:         z.enum(["Major","Minor","AEC","SEC","VAC","IDC"]).optional(),
-      semester:     z.string().optional(),
-      program:      z.string().optional(),
-      programcode:  z.string().optional(),
-      course:       z.string().optional().describe("New course name"),
-      coursecode:   z.string().optional().describe("New course code"),
-      credit:       z.number().optional(),
-      status:       z.enum(["Active","Inactive"]).optional()
+      id:              z.string().describe("Course map _id from list_regulation_courses"),
+      academicyear:    z.string().optional(),
+      regulation:      z.string().optional(),
+      subject:         z.string().optional(),
+      type:            z.enum(["Major","Minor","AEC","SEC","VAC","IDC"]).optional(),
+      semester:        z.string().optional(),
+      program:         z.string().optional(),
+      programcode:     z.string().optional(),
+      faculty:         z.string().optional(),
+      institution:     z.string().optional(),
+      department:      z.string().optional(),
+      course:          z.string().optional().describe("New course name"),
+      coursecode:      z.string().optional().describe("New course code"),
+      coursetype:      z.enum(["Theory","Practical","Tutorial","Internship","Project","Experiential learning"]).optional(),
+      deliverytype:    z.enum(["Compulsory","Elective"]).optional(),
+      coursemastercode:z.string().optional(),
+      credit:          z.number().optional(),
+      status:          z.enum(["Active","Inactive"]).optional()
     },
     async ({ id, ...args }) => {
       requireAuth();
@@ -721,17 +757,23 @@ export function registerRegulationTools(server, { requireAuth, resolveColid, res
     "Bulk insert course mappings from a JSON array. Each object needs: academicyear, regulation, subject, type, semester, program, programcode, course, coursecode.",
     {
       courses: z.array(z.object({
-        academicyear: z.string(),
-        regulation:   z.string(),
-        subject:      z.string(),
-        type:         z.string(),
-        semester:     z.string(),
-        program:      z.string(),
-        programcode:  z.string(),
-        course:       z.string(),
-        coursecode:   z.string(),
-        credit:       z.number().optional(),
-        status:       z.string().optional()
+        academicyear:    z.string(),
+        regulation:      z.string(),
+        subject:         z.string(),
+        type:            z.string(),
+        semester:        z.string(),
+        program:         z.string(),
+        programcode:     z.string(),
+        faculty:         z.string().optional(),
+        institution:     z.string().optional(),
+        department:      z.string().optional(),
+        course:          z.string(),
+        coursecode:      z.string(),
+        coursetype:      z.string().optional(),
+        deliverytype:    z.string().optional(),
+        coursemastercode:z.string().optional(),
+        credit:          z.number().optional(),
+        status:          z.string().optional()
       })).min(1)
     },
     async ({ courses }) => {
@@ -800,15 +842,19 @@ export function registerRegulationTools(server, { requireAuth, resolveColid, res
       const sample = [{
         "Academic Year": "2026-27", Regulation: "NEP2020", Subject: "Commerce", Type: "Major",
         Semester: "1", Program: "B.Com", "Program Code": "BCOM",
-        Course: "Financial Accounting", "Course Code": "BCOM101", Credit: 4, Status: "Active"
+        Faculty: "", Institution: "", Department: "",
+        Course: "Financial Accounting", "Course Code": "BCOM101",
+        "Course Type": "Theory", "Delivery Type": "Compulsory", "Course Master Code": "",
+        Credit: 4, Status: "Active"
       }];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sample), "Course Map");
       XLSX.writeFile(wb, output_path);
       return text({ success: true, path: output_path, columns: Object.keys(sample[0]),
         required: ["Academic Year","Regulation","Subject","Type","Semester","Program","Program Code","Course","Course Code"],
-        types: TYPES, semesters: ["1","2","3","4","5","6","7","8","9","10"],
-        note: "Fill from row 2 onward. Credit is optional (defaults to 0)."
+        types: TYPES, course_types: COURSE_TYPES, delivery_types: DELIVERY_TYPES,
+        semesters: ["1","2","3","4","5","6","7","8","9","10"],
+        note: "Fill from row 2 onward. Credit, Faculty, Department, Course Type, Delivery Type, Course Master Code are optional."
       });
     }
   );
